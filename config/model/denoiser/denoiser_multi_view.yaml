@@ -1,0 +1,15 @@
+defaults:
+  - autoencoder: unet
+  - multi_view_attention: epipolar_attention
+
+name: denoiser_multi_view
+
+autoencoder:
+  down_block_types: ["DownBlock2D", "DownBlock2D", "DownBlock2D", "DownBlock2D"]
+  up_block_types: ["UpBlock2D", "UpBlock2D", "UpBlock2D", "UpBlock2D"]
+  block_out_channels: [128, 256, 256, 512]
+
+multi_view_attention:
+  num_samples: [32, 16, 8, 4]
+
+

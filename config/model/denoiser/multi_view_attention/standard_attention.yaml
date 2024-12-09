@@ -1,0 +1,10 @@
+
+
+name: standard
+
+
+num_octaves: 10
+num_heads: 8
+d_mlp_multiplier: 1
+grid_sample_type: "bilinear"
+pos_enc: false

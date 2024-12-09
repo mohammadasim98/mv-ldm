@@ -1,0 +1,8 @@
+name: arbitrary
+
+num_context_views: 2
+num_target_views: 0
+
+# If you want to hard-code context and target views, do so here.
+context_views: null
+target_views: null

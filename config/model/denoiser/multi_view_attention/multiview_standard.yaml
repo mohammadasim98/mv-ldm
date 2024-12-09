@@ -1,0 +1,7 @@
+name: multiview_standard
+
+
+num_octaves: 10
+num_head: 1
+d_mlp_multiplier: 1
+grid_sample_type: "bilinear"

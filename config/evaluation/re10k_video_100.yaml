@@ -1,0 +1,59 @@
+
+# @package _global_
+
+
+dataset:
+  view_sampler:
+    index_path: assets/evaluation_index/re10k_video_150.json
+
+
+evaluation:
+  weights: "/BS/grl-co3d/work/models--naver--MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric/snapshots/06e7259f34c3060f322df5cb0c7b9094f57e41fc"
+  
+  methods:       
+
+    - name: GenWarp
+      key: genwarp
+      path: /BS/grl-masim-data/work/Photoconsistent-NVS/dataset-data/genwarp
+
+    - name: PhotoNVS
+      key: photonvs
+      path: /BS/grl-masim-data/work/Photoconsistent-NVS/dataset-data/photonvs
+
+    # - name: GenWarp (Post-hoc Fixed)
+    #   key: genwarp_post_fixed
+    #   path: /BS/grl-co3d/work/genwarp/outputs_lambda_1/video
+    
+    # - name: GenWarp (Post-hoc Pairwise)
+    #   key: genwarp_post_pairwise
+    #   path: /BS/grl-co3d/work/genwarp/outputs_lambda_1/video
+    
+    - name: Ours
+      key: ours
+      path: /BS/grl-masim-data/work/Photoconsistent-NVS/dataset-data/ours
+
+    # - name: DFM (Autoregressive)
+    #   key: dfm_auto
+    #   path: /BS/grl-masim-data/work/Photoconsistent-NVS/dataset-data/dfm_auto
+
+    - name: DFM (Simple)
+      key: dfm_simple
+      path: /BS/grl-masim-data/work/Photoconsistent-NVS/dataset-data/dfm_simple
+
+
+  types: pairwise
+  img_size: 256
+  gap: 1
+  nchuncks: 20
+  output_path: /BS/grl-co3d/work/mv_diff/baselines/multi_resolution_met3r_psnr/b_224
+  gt_directory: gt_images_video_100
+  mvssim_cfg: 
+    subsample_or_initxy1: 8
+    corres_weighting: true
+    conf_weighting: true
+    confidence_key: "conf"
+    reduction: null
+    return_matches: true
+    compute_intrinsics: false
+output_metrics_path: baselines/evaluation_metrics.json
+per_scene_metrics_path: baselines/per_scene_metrics.json

@@ -1,0 +1,85 @@
+
+# @package _global_
+
+defaults:
+  - override /dataset: re10k
+
+dataset:
+  view_sampler:
+    index_path: assets/evaluation_index/re10k_extra_c2_t4.json
+
+
+evaluation:
+  weights: "/BS/grl-co3d/work/models--naver--MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric/snapshots/06e7259f34c3060f322df5cb0c7b9094f57e41fc"
+  methods:       
+    - name: 218K
+      key: test_extra_218k
+      path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_test/test_extra_218k/test
+
+    - name: 474K
+      key: test_extra_474K
+      path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_test/test_extra_474k/test
+
+    - name: 608k
+      key: test_extra_608k
+      path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_test/test_extra_608k/test
+    
+    - name: 946k
+      key: test_extra_946k
+      path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_test/test_extra_946k/test
+    
+    - name: 1206k
+      key: test_extra_1206k
+      path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_test/test_extra_1206k/test
+    
+    - name: 1546k
+      key: test_extra_1546k
+      path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_test/test_extra_1546k/test
+
+    # - name: ray_enc
+    #   key: test_extra_1546k
+    #   path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_test/test_extra_1546k/test
+
+
+    # - name: cfg_3
+    #   key: test_extra_3
+    #   path: outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_test/test_extra_738k/test
+    
+    # - name: cfg_5
+    #   key: test_extra_5
+    #   path: outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_test/test_extra_5/test
+    
+    # - name: cfg_7
+    #   key: test_extra_7
+    #   path: outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_test/test_extra_7/test
+    
+    # - name: cfg_9
+    #   key: test_extra_9
+    #   path: outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_test/test_extra_9/test
+    
+    # - name: m1
+    #   key: test_extra_1000k
+    #   path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_no_rayenc_test/test_extra_1000k/test
+
+    # - name: m1
+    #   key: test_extra_946k
+    #   path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_test/test_extra_946k/test
+
+    # - name: m2
+    #   key: test_extra_938k
+    #   path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_test/test_extra_938k/test
+
+
+  types: fixed
+  img_size: 224
+  output_path: /BS/grl-co3d/work/mv_diff
+  mvc_cfg: 
+    subsample_or_initxy1: 8
+    corres_weighting: true
+    conf_weighting: true
+    confidence_key: "conf"
+    reduction: null
+    return_matches: true
+
+output_metrics_path: baselines/evaluation_metrics.json
+per_scene_metrics_path: baselines/per_scene_metrics.json

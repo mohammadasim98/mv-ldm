@@ -1,0 +1,4 @@
+name: cosine
+
+max_beta: 0.999
+s: 0.008  

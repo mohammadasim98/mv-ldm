@@ -1,0 +1,10 @@
+
+
+name: unet
+
+
+down_block_types: ["DownBlock2D", "DownBlock2D", "DownBlock2D", "DownBlock2D"]
+mid_block_type: "UNetMidBlock2D"
+up_block_types: ["UpBlock2D", "UpBlock2D", "UpBlock2D", "UpBlock2D"]
+only_cross_attention: false
+block_out_channels: [128, 256, 256, 512]

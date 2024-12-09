@@ -1,0 +1,81 @@
+
+# @package _global_
+
+
+dataset:
+  view_sampler:
+    index_path: assets/evaluation_index/re10k_video_150.json
+
+
+evaluation:
+  weights: "/BS/grl-co3d/work/models--naver--MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric/snapshots/06e7259f34c3060f322df5cb0c7b9094f57e41fc"
+  
+  methods:       
+  
+    
+    # - name: SD-2 + RayEnc
+    #   key: test_video_2000k
+    #   path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_video/test_video_2000k/video
+
+
+    - name: SVD
+      key: svd
+      path: /BS/grl-masim-data/work/Photoconsistent-NVS/svd
+      
+    - name: I2VGen-XL
+      key: i2vgenxl
+      path: /BS/grl-masim-data/work/Photoconsistent-NVS/i2vgenxl
+
+    # - name: Ours
+    #   key: test_video_1679k_3d
+    #   path: outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_video/test_video_1679k/video
+
+    # - name: DFM
+    #   key: dfm
+    #   path: /BS/grl-masim-data/work/DFM/outputs/dfm
+
+    # - name: cfg_3
+    #   key: test_extra_3
+    #   path: outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_test/test_extra_738k/test
+    
+    # - name: cfg_5
+    #   key: test_extra_5
+    #   path: outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_test/test_extra_5/test
+    
+    # - name: cfg_7
+    #   key: test_extra_7
+    #   path: outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_test/test_extra_7/test
+    
+    # - name: cfg_9
+    #   key: test_extra_9
+    #   path: outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_test/test_extra_9/test
+    
+    # - name: m1
+    #   key: test_extra_1000k
+    #   path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_no_rayenc_test/test_extra_1000k/test
+
+    # - name: m1
+    #   key: test_extra_946k
+    #   path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_test/test_extra_946k/test
+
+    # - name: m2
+    #   key: test_extra_938k
+    #   path: /BS/grl-co3d/work/mv_diff/outputs/base_sd_vae_nosch_ddim_no_rayenc_3d_test/test_extra_938k/test
+
+
+  types: pairwise
+  img_size: 224
+  gap: 1
+  nchuncks: 20
+  output_path: /BS/grl-co3d/work/mv_diff
+  gt_directory: gt_images_video_100
+  mvssim_cfg: 
+    subsample_or_initxy1: 8
+    corres_weighting: true
+    conf_weighting: true
+    confidence_key: "conf"
+    reduction: null
+    return_matches: true
+    compute_intrinsics: false
+output_metrics_path: baselines/evaluation_metrics.json
+per_scene_metrics_path: baselines/per_scene_metrics.json
