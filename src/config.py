@@ -6,7 +6,7 @@ from dacite import Config, from_dict
 from omegaconf import DictConfig, OmegaConf
 
 from .dataset.data_module import DataLoaderCfg, DatasetCfg
-from .model.diffusion_wrapper import FreezeCfg, OptimizerCfg, TestCfg, TrainCfg, ModelCfg
+from .model.config import FreezeCfg, OptimizerCfg, TestCfg, TrainCfg, ModelCfg
 
 @dataclass
 class CheckpointingCfg:
@@ -43,7 +43,7 @@ class RootCfg:
     train: TrainCfg
     freeze: FreezeCfg
     seed: int | None
-    ind: int | None = None
+    scene_id: int | None = None
 
 
 TYPE_HOOKS = {

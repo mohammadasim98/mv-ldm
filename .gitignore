@@ -162,25 +162,12 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-/datasets
-/dataset_cache
-/pretrained
 
 # Outputs
 /outputs
-/jobs
-/job_outputs
-/lightning_logs
 /checkpoints
 
 .bashrc
 /launcher_venv
-/slurm_logs
 *.torch
 *.ckpt
-/baselines
-/test/*
-/img_comparison
-*.png
-*.jpg
-*.mp4

@@ -25,7 +25,7 @@ from .view_sampler import ViewSampler, ViewSamplerEvaluation
 @dataclass
 class DatasetRE10kCfg(DatasetCfgCommon):
     name: Literal["re10k"]
-    roots: list[Path]
+    root: Path | None
     baseline_epsilon: float
     max_fov: float
     make_baseline_1: bool
@@ -56,12 +56,15 @@ class DatasetRE10k(IterableDataset):
 
         # Collect chunks.
         self.chunks = []
-        for root in cfg.roots:
-            root = root / self.data_stage
-            root_chunks = sorted(
-                [path for path in root.iterdir() if path.suffix == ".torch"]
-            )
-            self.chunks.extend(root_chunks)
+ 
+        if cfg.root is None:
+            raise Exception("Root directory of dataset is not defined. Please specify in your argument as dataset.root=<path-to-root-directory>")
+
+        root = cfg.root / self.data_stage
+        root_chunks = sorted(
+            [path for path in root.iterdir() if path.suffix == ".torch"]
+        )
+        self.chunks.extend(root_chunks)
         if self.cfg.overfit_to_scene is not None:
             # self.chunks = [self.index[name] for name in self.cfg.overfit_to_scene] * len(self.chunks)
         

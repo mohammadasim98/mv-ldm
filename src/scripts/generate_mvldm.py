@@ -7,7 +7,6 @@ import torch
 from jaxtyping import install_import_hook
 from omegaconf import DictConfig
 from pytorch_lightning import Trainer
-from src.evaluation.re10k_video_150 import interesting_indices
 
 # Configure beartype and jaxtyping.
 with install_import_hook(
@@ -22,30 +21,35 @@ with install_import_hook(
     from src.misc.step_tracker import StepTracker
     from src.config import RootCfg
 
-@dataclass
-class RootCfg2(RootCfg):
-    out_dir: Path | str = ""
-    
 @hydra.main(
     version_base=None,
     config_path="../../config",
     config_name="main",
 )
 def evaluate(cfg_dict: DictConfig):
-    cfg = load_typed_config(cfg_dict, RootCfg2)
+    cfg = load_typed_config(cfg_dict, RootCfg)
     set_cfg(cfg_dict)
     if cfg.seed is not None:
         torch.manual_seed(cfg.seed)
     print(cfg)
-    cfg.dataset.overfit_to_scene = [interesting_indices[int(cfg.ind)-1][0]]
-    output_dir = cfg.out_dir
+
+    with open(cfg.dataset.view_sampler.index_path) as f:
+        indices = json.load(f)
+
+    if type(cfg.scene_id) == str and cfg.scene_id in indices.keys():
+        cfg.dataset.overfit_to_scene = [cfg.scene_id]
+    elif type(int(cfg.scene_id)) == int:
+        cfg.dataset.overfit_to_scene = [list(indices.keys())[int(cfg.scene_id)]]
+    else:
+        raise(f"Either scene index {cfg.scene_id} is not defined or does not exists in {dataset.view_sampler.index_path}.")
+    
+    output_dir = cfg.test.output_dir
 
     # Set up logging with wandb.
     logger = LocalLogger()
 
     # This allows the current step to be shared with the data loader processes.
     step_tracker = StepTracker(cfg.train.step_offset)
-
     kwargs = dict(
         model_cfg=cfg.model,
         freeze_cfg = cfg.freeze,

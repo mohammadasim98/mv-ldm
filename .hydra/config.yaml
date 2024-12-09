@@ -1,0 +1,176 @@
+dataset:
+  view_sampler:
+    name: evaluation
+    index_path: assets/evaluation_index/re10k_video.json
+    num_context_views: 2
+    num_target_views: 3
+    min_distance_between_context_views: 50
+    max_distance_between_context_views: 180
+  name: re10k
+  root: /BS/3diff/static00/datasets/re10k
+  make_baseline_1: true
+  augment: false
+  random_transform_extrinsics: false
+  image_shape:
+  - 256
+  - 256
+  background_color:
+  - 0.0
+  - 0.0
+  - 0.0
+  cameras_are_circular: false
+  baseline_epsilon: 0.001
+  max_fov: 100.0
+  overfit_to_scene: null
+model:
+  scheduler:
+    name: ddim
+    pretrained_from: null
+    num_inference_steps: 70
+    num_train_timesteps: 1000
+    kwargs:
+      num_train_timesteps: 1000
+      clip_sample: false
+      prediction_type: epsilon
+      beta_start: 0.0001
+      beta_end: 0.02
+      beta_schedule: linear
+      trained_betas: null
+      set_alpha_to_one: true
+      steps_offset: 0
+  denoiser:
+    autoencoder:
+      name: unet
+      down_block_types:
+      - DownBlock2D
+      - DownBlock2D
+      - DownBlock2D
+      - DownBlock2D
+      mid_block_type: UNetMidBlock2D
+      up_block_types:
+      - UpBlock2D
+      - UpBlock2D
+      - UpBlock2D
+      - UpBlock2D
+      only_cross_attention: false
+      block_out_channels:
+      - 320
+      - 640
+      - 1280
+      - 1280
+    multi_view_attention:
+      name: spatial_transformer_3d
+      num_octaves: 10
+      num_heads: 8
+      d_mlp_multiplier: 1
+      grid_sample_type: bilinear
+      pos_enc: false
+    name: mv_unet
+    encoder_conditioning: true
+    mid_conditioning: true
+    decoder_conditioning: true
+    pretrained_from: stabilityai/stable-diffusion-2-1
+  autoencoder:
+    name: kl
+    pretrained_from: stabilityai/stable-diffusion-2-1
+    kwargs:
+      in_channels: 3
+      out_channels: 3
+      down_block_types:
+      - DownEncoderBlock2D
+      up_block_types:
+      - UpDecoderBlock2D
+      block_out_channels:
+      - 64
+      layers_per_block: 1
+      act_fn: silu
+      latent_channels: 4
+      norm_num_groups: 32
+      sample_size: 32
+      scaling_factor: 0.18215
+      shift_factor: null
+      latents_mean: null
+      latents_std: null
+      force_upcast: true
+      use_quant_conv: true
+      use_post_quant_conv: true
+      mid_block_add_attention: true
+  ema: false
+  ray_encodings:
+    num_origin_octaves: 15
+    num_direction_octaves: 15
+  use_cfg: true
+  cfg_scale: 3.0
+  cfg_train: true
+  use_ray_encoding: false
+  srt_ray_encoding: false
+  use_plucker: false
+  use_ema_sampling: false
+  enable_xformers_memory_efficient_attention: false
+  in_channels: 3
+  out_channels: 3
+scene_id: 0
+mode: test
+seed: null
+wandb:
+  project: mvdiff
+  entity: null
+  mode: online
+  activated: true
+  tags:
+  - re10k
+  - 256x256
+freeze:
+  denoiser: false
+  autoencoder: true
+data_loader:
+  train:
+    num_workers: 16
+    persistent_workers: true
+    batch_size: 6
+    seed: null
+  test:
+    num_workers: 16
+    persistent_workers: false
+    batch_size: 1
+    seed: 0
+  val:
+    num_workers: 16
+    persistent_workers: false
+    batch_size: 8
+    seed: 0
+checkpointing:
+  load: checkpoints/1679000.ckpt
+  resume: false
+  every_n_train_steps: 1000
+  save_top_k: 1
+train:
+  step_offset: 0
+  cfg_train: true
+test:
+  output_path: outputs/test
+  sampling_mode: anchored
+  limit_frames: null
+  num_anchors_views: 4
+  output_dir: ./outputs/mvldm
+trainer:
+  max_steps: 5000001
+  val_check_interval: 10000
+  task_steps: null
+  gradient_clip_val: 0.1
+  precision: 16-mixed
+  validate: true
+  accumulate_grad_batches: 2
+  limit_test_batches: 32
+  strategy: ddp_find_unused_parameters_true
+optimizer:
+  name: AdamW
+  lr: 2.0e-05
+  scale_lr: false
+  scheduler:
+    name: LinearLR
+    frequency: 1
+    interval: step
+    kwargs:
+      start_factor: 0.0005
+      total_iters: 200

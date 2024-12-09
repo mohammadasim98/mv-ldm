@@ -3,10 +3,10 @@
 defaults:
   - override /dataset: re10k
   - override /dataset/view_sampler: bounded
-  - override /model/scheduler: ddpm_eps
+  - override /model/scheduler: ddim
   - override /model/denoiser: mv_unet
   - override /model/denoiser/multi_view_attention: spatial_transformer_3d
-  - override /model/autoencoder: kl_f8
+  - override /model/autoencoder: kl
 
 dataset:
   image_shape: [256, 256] # [180, 320]
@@ -31,37 +31,26 @@ freeze:
 
 model:
   scheduler:
-    num_inference_steps: 50
-    beta_schedule:
-      start: 0.0001
-      end: 0.02
+    num_inference_steps: 70
+
   denoiser:
-    pretrained_from: /BS/grl-co3d/work/models--stabilityai--stable-diffusion-2-1/snapshots/5cae40e6a2745ae2b01ad92ae5043f95f23644d6
-  diffusion_scale: 2.0
+    pretrained_from: stabilityai/stable-diffusion-2-1
+
+  autoencoder:
+    pretrained_from: stabilityai/stable-diffusion-2-1
+
   ray_encodings: 
     num_origin_octaves: 15
     num_direction_octaves: 15
-  conditional: true
-  relative_camera: true
   use_cfg: true
   cfg_scale: 3.0
   cfg_train: true
   in_channels: 3
   out_channels: 3
   use_ray_encoding: false
-  projected_noise: false
   srt_ray_encoding: false
-  use_sd_vae: true
   use_plucker: false
-data_loader:
-  train:
-    num_workers: 16
-    persistent_workers: true
-    batch_size: 6
 
-  val:
-    batch_size: 8
-    # seed: 4444
 
 trainer:
   max_steps: 5_000_001
@@ -82,7 +71,3 @@ optimizer:
     kwargs:
       start_factor: 5.e-4
       total_iters: 200
-
-checkpointing:
-  load: checkpoints/base_sd_vae_nosch_ddim_no_rayenc_3d/1000000.ckpt
-  resume: false

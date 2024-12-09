@@ -1,11 +1,14 @@
 defaults:
   - dataset: re10k
   - optional dataset/diffusion_view_sampler: ${dataset/view_sampler}_${dataset}
-  - model/scheduler: ddpm_eps
+  - model/scheduler: ddim
   - model/denoiser: mv_unet
-  - model/autoencoder: kl_f8
+  - model/autoencoder: kl
 
-out_dir: ""
+scene_id: null
+mode: train
+seed: null
+
 hydra:
   run:
     dir: ""   # override!
@@ -13,47 +16,27 @@ hydra:
 wandb:
   project: mvdiff
   entity: null
-  # entity: geometric-representation-learning
   mode: online
   activated: true
-ind: null
-mode: train
+
 freeze:
   denoiser: false
   autoencoder: true
+
 model:
-  anchors: 4
   ema: false
-  diffusion_scale: 2.0
   ray_encodings: 
     num_origin_octaves: 10
     num_direction_octaves: 8
-  conditional: true
-  relative_camera: true
   use_cfg: true
   cfg_scale: 3.0
   cfg_train: true
-  in_channels: 3
-  out_channels: 3
   use_ray_encoding: true
-  projected_noise: false
-  perturb_factor: 0.2
-  use_target_mask: true
   srt_ray_encoding: false
-  use_sd_vae: true
-  use_svd_vae: false
-  use_sd_scheduler: false
-  use_svd_scheduler: false
-  use_ddim_scheduler: true
   use_plucker: false
   use_ema_sampling: false
-  v_prediction: false
   enable_xformers_memory_efficient_attention: false
-  weighted_loss: false
-  old_sd_v_prediction: true
-  repaint_sampling: false
-  view_sampler: null
-  use_flow_matching: false
+
 dataset:
   overfit_to_scene: null
 
@@ -62,20 +45,18 @@ data_loader:
   train:
     num_workers: 16
     persistent_workers: true
-    batch_size: 16
+    batch_size: 6
     seed: null
   test:
     num_workers: 16
     persistent_workers: false
-    batch_size: 16
-    seed: 2345
-  val:
-    num_workers: 1
-    persistent_workers: true
     batch_size: 1
-    seed: null
-
-
+    seed: 0
+  val:
+    num_workers: 16
+    persistent_workers: false
+    batch_size: 8
+    seed: 0
 
 checkpointing:
   load: null
@@ -84,13 +65,15 @@ checkpointing:
   save_top_k: 1
 
 train:
-
   step_offset: 0
   cfg_train: true
+
 test:
   output_path: outputs/test
-  mode: null
-seed: null
+  sampling_mode: null
+  limit_frames: null
+  num_anchors_views: 4
+  output_dir: ""
 
 trainer:
   max_steps: 1_000_001

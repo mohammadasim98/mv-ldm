@@ -44,10 +44,8 @@ Please move all dataset directories into a newly created `datasets` folder in th
 For experiments on RealEstate10k, we use the same dataset version and preprocessing into chunks as pixelSplat. Please refer to their codebase [here](https://github.com/dcharatan/pixelsplat#acquiring-datasets) for information about how to obtain the data.
 
 ## Acquiring Pre-trained Checkpoints
-We provide two sets of checkpoints as part of our releases [here](https://github.com/Chrixtar/latentsplat/releases):
-1. Pre-trained autoencoders and discriminators from [LDM](https://github.com/CompVis/latent-diffusion) adapted for finetuning within latentSplat. They serve as a starting point for latentSplat training. Please download the [pretrained.zip] and extract it in the project root directory for training from scratch.
 
-2. Trained checkpoint of **MV-LDM** for RealEstate10k are available o Hugging Face at [asimbluemoon/mvldm-1.0](https://huggingface.co/asimbluemoon/mvldm-1.0/tree/main).
+Trained checkpoint of **MV-LDM** for RealEstate10k are available on Hugging Face at [asimbluemoon/mvldm-1.0](https://huggingface.co/asimbluemoon/mvldm-1.0/tree/main).
 
 ## Running the Code
 
@@ -55,28 +53,38 @@ We provide two sets of checkpoints as part of our releases [here](https://github
 
 The main entry point is `src/scripts/generate_mvldm.py`. Call it via:
 
-```bash
-python -m src.scripts.generate_mvldm +experiment=baseline model.anchors=4 checkpointing.load="<path-to-checkpoint>" mode=test dataset/view_sampler=evaluation dataset.view_sampler.index_path=assets/evaluation_index/re10k_video.json test.mode=video_anchor ind="<scene-index>" out_dir=./outputs/mvldm dataset.root="<path-to-re10k-dataset>"
+> [!IMPORTANT] 
+> Sampling requires a GPU with at least 16 GB of VRAM.
 
+```bash
+python -m src.scripts.generate_mvldm +experiment=baseline dataset.root="<root-path-to-re10k-dataset>" scene_id="<scene-id>" checkpointing.load="<path-to-checkpoint>" mode=test dataset/view_sampler=evaluation dataset.view_sampler.index_path=assets/evaluation_index/re10k_video.json test.sampling_mode=anchored test.num_anchors_views=4 test.output_dir=./outputs/mvldm 
 ```
 
-This configuration requires a GPU with at least 40 GB of VRAM. 
-
+Where ```ind="<scene-id>"``` either defines the specific integer index of a scene ordered as in ```assets/evaluation_index/re10k_video.json``` or the sequence string directly.
 
 ### Training MV-LDM
 Our code supports multi-GPU training. The above batch size is the per-GPU batch size.
 
+> [!IMPORTANT] 
+> Training requires a GPU with at least 40 GB of VRAM.
+
+
+```bash
+python -m src.main +experiment=baseline mode=train hydra.run.dir="<runtime-dir>" dataset.root="<root-path-to-re10k-dataset>" hydra.job.name=train
+```
+
+In case of memory issues during training, we recommend lowering the batch size by appending ```data_loader.train.batch_size="<batch-size>"``` to the above command. For running the training as a job chain on slurm or resuming training, always set the correct path in ```hydra.run.dir="<runtime-dir>"``` for each task.
 
 
 ## BibTeX
-
+If you are planning to use MV-LDM in your work, consider citing it as follows.
 <section class="section" id="BibTeX">
   <div class="container is-max-desktop content">
-    <pre><code>@inproceedings{wewer24latentsplat,
-    title     = {latentSplat: Autoencoding Variational Gaussians for Fast Generalizable 3D Reconstruction},
-    author    = {Wewer, Christopher and Raj, Kevin and Ilg, Eddy and Schiele, Bernt and Lenssen, Jan Eric},
+    <pre><code>@misc{asim24met3r,
+    title = {MET3R: Measuring Multi-View Consistency in Generated Images},
+    author = {Asim, Mohammad and Wewer, Christopher and Wimmer, Thomas and Schiele, Bernt and Lenssen, Jan Eric},
     booktitle = {arXiv},
-    year      = {2024},
+    year = {2024},
 }</code></pre>
   </div>
 </section>

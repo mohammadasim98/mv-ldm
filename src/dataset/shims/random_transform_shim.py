@@ -4,7 +4,7 @@ from torch import Tensor
 from einops import rearrange, repeat
 
 from ..types import AnyExample, AnyViews
-from ...misc.isotropic_gaussian import IsotropicGaussianSO3
+from ...misc.rotation_utils import IsotropicGaussianSO3
 
 def random_transform_extrinsics(
     extrinsics: Float[Tensor, "view 4 4"],

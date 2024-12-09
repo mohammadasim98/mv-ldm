@@ -2,7 +2,7 @@ defaults:
   - view_sampler: bounded
 
 name: re10k
-roots: [""]
+root: null
 make_baseline_1: true
 augment: false
 random_transform_extrinsics: false

@@ -21,11 +21,11 @@ from .shims.crop_shim import apply_crop_shim
 from .types import Stage
 from .view_sampler import ViewSampler, ViewSamplerEvaluation
 from torch.utils.data import Dataset
-from .re10k_video_150 import interesting_indices
+
 @dataclass
 class DatasetRE10kV2Cfg(DatasetCfgCommon):
     name: Literal["re10k_non_iter"]
-    roots: list[Path]
+    root: Path | None
     baseline_epsilon: float
     max_fov: float
     make_baseline_1: bool
@@ -56,13 +56,17 @@ class DatasetRE10kV2(Dataset):
 
         # Collect chunks.
         self.chunks = []
-        for root in cfg.roots:
-            root = root / "test"
-            root_chunks = sorted(
-                [path for path in root.iterdir() if path.suffix == ".torch"]
-            )
-            self.chunks.extend(root_chunks)
-        self.overfit_to_scene = [x[0] for x in interesting_indices]
+        with open(view_sampler.index_path) as f:
+            indices = json.load(f)
+        if cfg.root is None:
+            raise Exception("Root directory of dataset is not defined. Please specify in your argument as dataset.root=<path-to-root-directory>")
+
+        root = cfg.root / "test"
+        root_chunks = sorted(
+            [path for path in root.iterdir() if path.suffix == ".torch"]
+        )
+        self.chunks.extend(root_chunks)
+        self.overfit_to_scene = list(indices.keys())
         
         with open(root / "index.json") as f:
             self.map_dict = json.load(f)

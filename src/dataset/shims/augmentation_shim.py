@@ -4,7 +4,6 @@ from torch import Tensor
 from einops import rearrange, repeat
 
 from ..types import AnyExample, AnyViews
-from ...misc.isotropic_gaussian import IsotropicGaussianSO3
 
 def reflect_extrinsics(
     extrinsics: Float[Tensor, "*batch 4 4"],

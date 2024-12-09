@@ -2,7 +2,7 @@ defaults:
   - view_sampler: bounded
 
 name: re10k_non_iter
-roots: [/BS/3diff/static00/datasets/re10k]
+root: null
 make_baseline_1: true
 augment: false
 random_transform_extrinsics: false

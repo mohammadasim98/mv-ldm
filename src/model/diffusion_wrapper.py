@@ -1,95 +1,51 @@
-import numpy as np
+"""
+"""
+
+# Standard Imports
+import os
+import PIL
+import math
+import hydra
+from tqdm import tqdm
 from pathlib import Path
+from heapq import nsmallest
 from jaxtyping import Float
 from dataclasses import dataclass
-from einops import repeat, rearrange, reduce
-from typing import Any, Dict, Iterator, Literal, Optional, Protocol, runtime_checkable
-from tqdm import tqdm
-from ..misc.camera_utils import absolute_to_relative_camera
-import os
+from einops import repeat, rearrange
+from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
+from typing import Any, Dict, Iterator, Literal, Optional
+
+# Torch and NumPy Imports
 import torch
+import numpy as np
 import torch.nn.functional as F
 from torch import Tensor, optim, nn
 from torch.nn import Module, Parameter
-import hydra
+from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
+
+# Pytorch Lightning and Diffusers Import
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
+from diffusers.utils.import_utils import is_xformers_available
+
+# Custom Imports
+from .config import ModelCfg, OptimizerCfg, TestCfg, TrainCfg, FreezeCfg, LRSchedulerCfg
+
+from .denoiser import get_denoiser
+from .encodings.positional_encoding import PositionalEncoding
+from .srt.layers import RayEncoder
+from .scheduler import get_scheduler
+from .autoencoder import get_autoencoder
+
+from ..misc.camera_utils import absolute_to_relative_camera
+from ..misc.step_tracker import StepTracker
+from ..misc.image_io import prep_image, save_image, get_hist_image
 from ..visualization.validation_in_3d import render_cameras
-import math
 from ..visualization.annotation import add_label
 from ..visualization.layout import add_border, hcat, vcat
 from ..dataset.types import BatchedExample
-from ..misc.benchmarker import Benchmarker
-from ..misc.tensor import unsqueeze_as
-from ..misc.step_tracker import StepTracker
-from ..misc.image_io import prep_image, save_image, get_hist_image
 from ..geometry.projection import get_world_rays, sample_image_grid
-
-from .diffusion import SchedulerCfg, get_scheduler
-from .diffusion.projected_noise import get_projected_noise
-from .denoiser import get_denoiser, DenoiserCfg
-from .encodings.positional_encoding import PositionalEncoding
-from .autoencoder import get_autoencoder, AutoencoderCfg
-from .srt.layers import RayEncoder
-from diffusers import AutoencoderKL, AutoencoderKLTemporalDecoder, LMSDiscreteScheduler, DDIMScheduler, EulerDiscreteScheduler, FlowMatchEulerDiscreteScheduler
-from transformers import CLIPTextModel, CLIPTokenizer
-from diffusers.utils.import_utils import is_xformers_available
-
-from heapq import nsmallest
-# from torch_ema import ExponentialMovingAverage
-from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
-import PIL
-from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
-
-
-
-@dataclass
-class RayEncodingsCfg:
-    num_origin_octaves: int=10
-    num_direction_octaves: int=8
-
-
-@dataclass
-class ModelCfg:
-    scheduler: SchedulerCfg
-    denoiser: DenoiserCfg
-    autoencoder: AutoencoderCfg
-    ray_encodings: RayEncodingsCfg
-    diffusion_scale: float=2.0
-    conditional: bool=False
-    relative_camera: bool=False
-    use_cfg: bool=False
-    cfg_scale: float=3.0
-    cfg_train: bool=True
-    use_ray_encoding: bool=True
-    projected_noise: bool=False
-    perturb_factor: float=0.2
-    use_target_mask: bool=True
-    srt_ray_encoding: bool=False
-    use_sd_vae: bool=False
-    use_svd_vae: bool=False
-    use_sd_scheduler: bool=False
-    use_svd_scheduler: bool=False
-    use_ddim_scheduler: bool=False
-    use_plucker: bool=False
-    ema: bool=False
-    use_ema_sampling: bool=False
-    v_prediction: bool=False
-    enable_xformers_memory_efficient_attention: bool=False
-    weighted_loss: bool=False
-    old_sd_v_prediction: bool=True
-    anchors: int=4
-    repaint_sampling: bool=False
-    use_flow_matching: bool=False
-
-@dataclass
-class LRSchedulerCfg:
-    name: str
-    frequency: int = 1
-    interval: Literal["epoch", "step"] = "step"
-    kwargs: Dict[str, Any] | None = None
-
 
 def freeze(m: Module) -> None:
     for param in m.parameters():
@@ -101,42 +57,6 @@ def unfreeze(m: Module) -> None:
     for param in m.parameters():
         param.requires_grad = True
     m.train()
-
-
-@dataclass
-class FreezeCfg:
-    denoiser: bool = False
-    autoencoder: bool = True
-    
-@dataclass
-class OptimizerCfg:
-    name: str
-    lr: float
-    scale_lr: bool
-    kwargs: Dict[str, Any] | None = None
-    scheduler: LRSchedulerCfg | None = None
-  
-
-@dataclass
-class TestCfg:
-    output_path: Path
-    mode: str | None = None
-
-@dataclass
-class TrainCfg:
-    step_offset: int
-    cfg_train: bool=True
-@runtime_checkable
-class TrajectoryFn(Protocol):
-    def __call__(
-        self,
-        t: Float[Tensor, " t"],
-    ) -> tuple[
-        Float[Tensor, "batch view 4 4"],  # extrinsics
-        Float[Tensor, "batch view 3 3"],  # intrinsics
-    ]:
-        pass
-
 
 class DiffusionWrapper(LightningModule):
     logger: Optional[WandbLogger]
@@ -166,34 +86,19 @@ class DiffusionWrapper(LightningModule):
         self.freeze_cfg = freeze_cfg
         self.step_tracker = step_tracker
         self.output_dir = output_dir
-        if model_cfg.use_sd_scheduler:
-            self.scheduler = DDIMScheduler.from_pretrained(model_cfg.denoiser.pretrained_from, subfolder="scheduler")
-        elif model_cfg.use_svd_scheduler:
-            self.scheduler = EulerDiscreteScheduler.from_pretrained(model_cfg.denoiser.pretrained_from, subfolder="scheduler")
-        elif model_cfg.use_flow_matching:
-            self.scheduler = FlowMatchEulerDiscreteScheduler()
 
-        elif model_cfg.use_ddim_scheduler:
-            self.scheduler = DDIMScheduler(
-                num_train_timesteps=model_cfg.scheduler.num_train_timesteps,
-                beta_start=model_cfg.scheduler.beta_schedule.start, 
-                beta_end=model_cfg.scheduler.beta_schedule.end,
-                prediction_type="epsilon" if model_cfg.scheduler.predict_epsilon else "sample",
-                clip_sample=model_cfg.scheduler.clip_sample
-            )
-        else:
-            self.scheduler = get_scheduler(model_cfg.scheduler)
-            
-        in_channels = model_cfg.autoencoder.latent_channels
-        out_channels = model_cfg.autoencoder.latent_channels
-        print("Projected Noise: ", self.model_cfg.projected_noise)
-        print("Plucker Coordinates: ", model_cfg.use_plucker)
-        if self.freeze_cfg.denoiser:
-            freeze(self.denoiser)
-        # This is used for testing.
-        self.benchmarker = Benchmarker()
+        print("Using Plucker Coordinates: ", model_cfg.use_plucker)
+        print("Using SRT Ray Encoding: ", self.model_cfg.srt_ray_encoding)
+        print("Using Standard Ray Encoding: ", model_cfg.use_ray_encoding)
+        print("Using SD VAE from: ", model_cfg.denoiser.pretrained_from)
+        print("Using EMA: ", self.model_cfg.ema)
+        print("Using Memory Efficient Attention: ", self.model_cfg.enable_xformers_memory_efficient_attention)
+        
+
+        in_channels = model_cfg.autoencoder.kwargs.latent_channels
+        out_channels = model_cfg.autoencoder.kwargs.latent_channels
+
         if self.model_cfg.srt_ray_encoding:
-            
             self.ray_encoder = RayEncoder(
                 pos_octaves=model_cfg.ray_encodings.num_origin_octaves,
                 ray_octaves=model_cfg.ray_encodings.num_direction_octaves
@@ -217,42 +122,28 @@ class DiffusionWrapper(LightningModule):
                     in_channels += dir_dim 
 
             else:
-                print("No Ray Encoding")
                 in_channels += 3 + 3
-        if model_cfg.use_target_mask:
-            in_channels += 1
+        
+        in_channels += 1
+        
         self.denoiser = get_denoiser(model_cfg.denoiser, in_channels, out_channels)
-        if model_cfg.use_sd_vae:
-            print("Loading from SD VAE from: ", model_cfg.denoiser.pretrained_from )
-            self.autoencoder = AutoencoderKL.from_pretrained(model_cfg.denoiser.pretrained_from, subfolder="vae")
-        elif model_cfg.use_svd_vae:
-            print("Loading from SVD VAE from: ", model_cfg.denoiser.pretrained_from )
-            self.autoencoder = AutoencoderKLTemporalDecoder.from_pretrained(model_cfg.denoiser.pretrained_from, subfolder="vae")
-        else:
-            print("Loading from LDM VAE from: ", model_cfg.autoencoder.model)
-            self.autoencoder = get_autoencoder(model_cfg.autoencoder)
-        
-        # self.tokenizer = CLIPTokenizer.from_pretrained(model_cfg.denoiser.pretrained_from, subfolder="tokenizer")
-        # self.text_encoder = CLIPTextModel.from_pretrained(model_cfg.denoiser.pretrained_from, subfolder="text_encoder")
-        # freeze(self.text_encoder)
-        freeze(self.autoencoder)
-        
-        if self.model_cfg.ema:
-            print("Using EMA")
+        self.autoencoder = get_autoencoder(model_cfg.autoencoder)
+        self.scheduler = get_scheduler(model_cfg.scheduler)
 
+        if self.freeze_cfg.denoiser:
+            freeze(self.denoiser)
+        if self.freeze_cfg.autoencoder:
+            freeze(self.autoencoder)
+
+        if self.model_cfg.ema:
             self.ema = AveragedModel(
                 self.denoiser, 
                 multi_avg_fn=get_ema_multi_avg_fn(0.995)
             )
-            # self.ema = ExponentialMovingAverage(
-            #     self.denoiser.parameters(),
-            #      decay=0.995
-            # )
-            
+   
         if self.model_cfg.enable_xformers_memory_efficient_attention:
             if is_xformers_available():
                 import xformers
-
                 self.denoiser.unet.enable_xformers_memory_efficient_attention()
             else:
                 raise ValueError(
@@ -260,8 +151,6 @@ class DiffusionWrapper(LightningModule):
 
     def on_before_zero_grad(self, *args, **kwargs):
         if self.model_cfg.ema:
-
-            # print(self.denoiser.parameters().device)
             self.ema.update_parameters(self.denoiser)   
 
     def setup(self, stage: str) -> None:
@@ -276,30 +165,6 @@ class DiffusionWrapper(LightningModule):
             self.lr = effective_batch_size * self.optimizer_cfg.lr \
                 if self.optimizer_cfg.scale_lr else self.optimizer_cfg.lr
         return super().setup(stage)
-
-    def compute_snr(self, timesteps):
-        """
-        Computes SNR as per https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L847-L849
-        """
-        alphas_cumprod = self.scheduler.alphas_cumprod
-        sqrt_alphas_cumprod = alphas_cumprod**0.5
-        sqrt_one_minus_alphas_cumprod = (1.0 - alphas_cumprod) ** 0.5
-
-        # Expand the tensors.
-        # Adapted from https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L1026
-        sqrt_alphas_cumprod = sqrt_alphas_cumprod.to(device=timesteps.device)[timesteps].float()
-        while len(sqrt_alphas_cumprod.shape) < len(timesteps.shape):
-            sqrt_alphas_cumprod = sqrt_alphas_cumprod[..., None]
-        alpha = sqrt_alphas_cumprod.expand(timesteps.shape)
-
-        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod.to(device=timesteps.device)[timesteps].float()
-        while len(sqrt_one_minus_alphas_cumprod.shape) < len(timesteps.shape):
-            sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[..., None]
-        sigma = sqrt_one_minus_alphas_cumprod.expand(timesteps.shape)
-
-        # Compute SNR.
-        snr = (alpha / sigma) ** 2
-        return snr
 
     def generate_image_rays(
         self,
@@ -324,20 +189,25 @@ class DiffusionWrapper(LightningModule):
         )
         return repeat(xy, "h w xy -> b v (h w) xy", b=b, v=v), origins, directions
 
-    def set_timesteps(self, num=None):
+    def set_timesteps(self, num: Optional[int]=None):
+        """
+            Args:
+                num (Optional[int]): Override the number of inference steps. Default to None.
+        """
         num_inference_timesteps = self.model_cfg.scheduler.num_inference_steps if num is None else num
-        print("Setting Max Timesteps T: ", num_inference_timesteps)
         self.scheduler.set_timesteps(num_inference_timesteps)    
         
     def on_validation_batch_start(self, batch, batch_idx, dataloader_idx=0):
+        print("Setting Max Timesteps for validation to: ", self.model_cfg.scheduler.num_train_timesteps)
         self.set_timesteps()
     def on_test_batch_start(self, batch, batch_idx, dataloader_idx=0):
+        print("Setting Max Timesteps for testing to: ", self.model_cfg.scheduler.num_train_timesteps)
         self.set_timesteps()
     def on_predict_batch_start(self, batch, batch_idx, dataloader_idx=0):
+        print("Setting Max Timesteps for prediction to: ", self.model_cfg.scheduler.num_train_timesteps)
         self.set_timesteps()
-
     def on_validation_batch_end(self, batch, batch_idx, dataloader_idx=0):
-        print("Setting Max Timesteps T: ", self.model_cfg.scheduler.num_train_timesteps)
+        print("Setting Max Timesteps for training to: ", self.model_cfg.scheduler.num_train_timesteps)
         self.scheduler.set_timesteps(self.model_cfg.scheduler.num_train_timesteps)
     
     def sample_indices(self, batch, index: int | Tensor, random: int=True):
@@ -408,36 +278,25 @@ class DiffusionWrapper(LightningModule):
     def first_stage_encode(self, inputs):
         b, v, c, h, w = inputs.shape
         inputs = rearrange(inputs, "b v c h w -> (b v) c h w ")
-        if self.model_cfg.use_sd_vae or self.model_cfg.use_svd_vae:
-            inputs = inputs * 2.0 - 1.0 
-            with torch.no_grad():  
-                latents = self.autoencoder.encode(inputs).latent_dist.sample() * 0.18215
-        else:
-            with torch.no_grad():
-                posterior = self.autoencoder.encode(inputs)
-            latents = posterior.sample()
+        inputs = inputs * 2.0 - 1.0 
+        with torch.no_grad():  
+            latents = self.autoencoder.encode(inputs).latent_dist.sample() * 0.18215
+
         latents = rearrange(latents, "(b v) c h w -> b v c h w", b=b)
         
         return latents
     
     def last_stage_decode(self, latents):
         b, v, c, h, w = latents.shape
-        if self.model_cfg.use_sd_vae or self.model_cfg.use_svd_vae:
-            latents = rearrange(latents, "b v c h w -> (b v) c h w ")
+        latents = rearrange(latents, "b v c h w -> (b v) c h w ")
 
-            latents = (1 / 0.18215) * latents     
-            with torch.no_grad(): 
-                if self.model_cfg.use_svd_vae:
-                    image = self.autoencoder.decode(latents, num_frames=v).sample  
+        latents = (1 / 0.18215) * latents     
+        with torch.no_grad(): 
+            image = self.autoencoder.decode(latents).sample  
+        image = rearrange(image, "(b v) c h w -> b v c h w", b=b)
 
-                else:
-                    image = self.autoencoder.decode(latents).sample  
-            image = rearrange(image, "(b v) c h w -> b v c h w", b=b)
+        return (image / 2 + 0.5).clamp(0, 1) 
 
-            return (image / 2 + 0.5).clamp(0, 1) 
-
-        else:
-            return self.autoencoder.decode(latents)
         
     def ray_encode(self, batch, context_latents, target_latents):
         b, *_, hl, wl = context_latents.shape
@@ -472,76 +331,58 @@ class DiffusionWrapper(LightningModule):
         b, v_c, c, h, w = batch["context"]["image"].shape
         b, v_t, c, h, w = batch["target"]["image"].shape
         device = batch["context"]["image"].device
-         
+
+        # Prepare context and target views 
         index = torch.randint(1, v_c+1, size=(1,), dtype=torch.long).to(device).item()
         batch, rel_index = self.sample_indices(batch, index, True)
         
         b, v_t, c, h, w = batch["target"]["image"].shape
         b, v_c, c, h, w = batch["context"]["image"].shape
         
+        
+        # Randomly choose between absolute and relative poses
         concat_extr = torch.concat([batch["context"]["extrinsics"], batch["target"]["extrinsics"]], dim=1)
-        if torch.randint(0, 2, size=(1,), dtype=torch.long).to(device).item() == 0:
-            
+        relative_pose = np.random.choice([False, True], 1, p=[0.50, 0.50])
+        if relative_pose == 0:
+            # Transform from absolute to relative poses
             rel_extrinsics = absolute_to_relative_camera(concat_extr, index=rel_index).float()
         else:
             rel_extrinsics = concat_extr
+        
         batch["context"]["extrinsics"] = rel_extrinsics[:, :v_c, ...]
         batch["target"]["extrinsics"] = rel_extrinsics[:, v_c:, ...]
 
+        # Encode context and target views with VAE
         inputs = torch.concat([batch["context"]["image"], batch["target"]["image"]], dim=1)
-
         latents = self.first_stage_encode(inputs)
-
         context_latents = latents[:, :v_c, ...]
         target_latents = latents[:, v_c:, ...]
         
-
+        # Add noise to target views
         target_noise = torch.randn_like(target_latents).to(target_latents.device)  
+        timestep_target = torch.randint(
+            0, 
+            self.model_cfg.scheduler.num_train_timesteps, 
+            size=(b,), 
+            device=self.device,
+            dtype=torch.long
+        ) 
+        noisy_latents = self.scheduler.add_noise(target_latents, target_noise, timestep_target)
         
-        if self.model_cfg.use_svd_scheduler:    
-            ts = self.scheduler.timesteps
-            ts = ts.to(target_latents.device)
-        
-
-        
-        if self.model_cfg.use_flow_matching:
-            ts = self.scheduler.timesteps
-            ts = ts.to(target_latents.device)
-            timestep_target = torch.randint(
-                0, 
-                self.model_cfg.scheduler.num_train_timesteps, 
-                size=(b,), 
-                device=self.device,
-                dtype=torch.long
-            )
-            noisy_latents = self.scheduler.scale_noise(target_latents, ts[timestep_target], target_noise)
-        else:
-            timestep_target = torch.randint(
-                0, 
-                self.model_cfg.scheduler.num_train_timesteps, 
-                size=(b,), 
-                device=self.device,
-                dtype=torch.long
-            ) 
- 
-            if self.model_cfg.use_svd_scheduler:    
-                noisy_latents = self.scheduler.add_noise(target_latents, target_noise, ts[timestep_target])
-            else:
-                noisy_latents = self.scheduler.add_noise(target_latents, target_noise, timestep_target)
+        # Prepare context and target inputs to diffusion model
         ray_encodings = self.ray_encode(batch, context_latents, target_latents)
-        timestep_context = torch.zeros((b, ), dtype=torch.long).to(context_latents.device)
-
-        
         target_mask = torch.ones((*target_latents.shape[:2], 1, *target_latents.shape[3:])).to(target_latents.device)
         context_mask = torch.zeros((*context_latents.shape[:2], 1, *context_latents.shape[3:])).to(context_latents.device)
-        
         target_inputs = torch.concat([noisy_latents, target_mask], dim=2)
+        timestep_context = torch.zeros((b, ), dtype=torch.long).to(context_latents.device)        
         
         unconditional = True
-
         if self.train_cfg.cfg_train:
+            # Randomly choose to train conditionally or unconditionally
             unconditional = np.random.choice([False, True], 1, p=[0.90, 0.10])
+        
         if unconditional:
+            # For unconditionl, drop the context views
             ray_encodings = ray_encodings[:, v_c:, ...]
             inputs = target_inputs
             timesteps = repeat(timestep_target, "b -> b vt", vt=v_t)
@@ -554,64 +395,27 @@ class DiffusionWrapper(LightningModule):
                 ], 
                 dim=1
             )
-
         inputs = torch.concat([inputs, ray_encodings], dim=2)
 
+        # Denoise
         pred = self.denoiser.forward(latents=inputs, timestep=timesteps)
-        
-        
         if unconditional:
             pred_out = pred
         else:
             pred_out = pred[:, v_c:, ...]
 
-        
-        # Denoise the latents
-        if not self.model_cfg.use_flow_matching:
-
-            snr = self.compute_snr(timestep_target)
-        else:
-            snr = 1.0
-        if self.model_cfg.v_prediction:
-
-            if self.model_cfg.use_svd_scheduler:
-
-                t = ts[timestep_target]
-            else:
-                t = timestep_target
-            gt = self.scheduler.get_velocity(target_latents, target_noise, t)
-            divisor = snr + 1
-
-
-        elif self.model_cfg.scheduler.predict_epsilon:
-            gt = target_noise
-            divisor = snr 
-        else:
-            gt = target_latents
-        
-        if self.model_cfg.weighted_loss:
-            
-            mse_loss_weights = torch.stack([snr, 5.0 * torch.ones_like(timestep_target)], dim=1).min(dim=1)[0]
-
-            mse_loss_weights /= divisor
-            loss = F.mse_loss(pred_out.float(), gt.float(), reduction="none")
-            loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
-            loss = loss.mean()
-        else:
-            loss = F.mse_loss(pred_out.float(), gt.float(), reduction="mean")
+        # Diffusion Loss
+        loss = F.mse_loss(pred_out.float(), target_latents.float(), reduction="mean")
 
         self.log("loss/diffusion", loss)   
-
         return loss
     
     def step(self, model, x_t, ts, context_inputs, ray_encodings, target_mask):
         
         b, v_c, *_ = context_inputs.shape 
         b, v_t, *_ = x_t.shape 
-        if self.model_cfg.use_sd_scheduler or self.model_cfg.use_svd_scheduler:
-            x_t_scaled = self.scheduler.scale_model_input(x_t, ts)
-        else:
-            x_t_scaled = x_t
+        x_t_scaled = self.scheduler.scale_model_input(x_t, ts)
+
         timestep_context = torch.tensor([0], device=self.device, dtype=torch.long)
         timestep_target = ts.to(torch.long).to(x_t.device).unsqueeze(0)
         timestep_target = repeat(timestep_target, "() -> b", b=b)
@@ -643,14 +447,8 @@ class DiffusionWrapper(LightningModule):
             pred_out = pred_conditional[:, v_c:, ...]
 
 
-        
-        if not (self.model_cfg.use_sd_scheduler or self.model_cfg.use_svd_scheduler or self.model_cfg.use_ddim_scheduler or self.model_cfg.use_flow_matching):
-            ts = ts.long().expand(b).cuda()
         # print(self.scheduler.config.prediction_type)
-        if self.model_cfg.use_sd_scheduler or self.model_cfg.use_ddim_scheduler :
-            sch_out = self.scheduler.step(pred_out, ts, x_t, eta=0.0)
-        else:
-            sch_out = self.scheduler.step(pred_out, ts, x_t)
+        sch_out = self.scheduler.step(pred_out, ts, x_t)
 
         return sch_out.prev_sample
     
@@ -673,9 +471,7 @@ class DiffusionWrapper(LightningModule):
         context_latents = latents
  
         x_t = torch.randn((context_latents.shape[0], v_t, *context_latents.shape[2:])).to(context_latents.device)  
- 
-        if self.model_cfg.use_sd_scheduler or self.model_cfg.use_svd_scheduler:
-            x_t *= self.scheduler.init_noise_sigma 
+        x_t *= self.scheduler.init_noise_sigma 
             
         target_mask = torch.ones((*x_t.shape[:2], 1, *x_t.shape[3:])).to(x_t.device)
         context_mask = torch.zeros((*context_latents.shape[:2], 1, *context_latents.shape[3:])).to(context_latents.device)
@@ -690,9 +486,7 @@ class DiffusionWrapper(LightningModule):
         for i, ts in enumerate(tqdm(self.scheduler.timesteps)):
 
             x_t = self.step(model, x_t, ts, context_inputs, ray_encodings, target_mask)
-        
 
-        
         return self.last_stage_decode(x_t), batch
             
     @rank_zero_only
@@ -847,7 +641,7 @@ class DiffusionWrapper(LightningModule):
             for index, color in zip(batch["context"]["index"][i], batch["context"]["image"][i]):
                 save_image(color, output_dir / scene / f"context/{index:0>6}.png")
 
-    def test_video_anchor_long(self, batch, batch_idx, return_predictions: bool=False, limit_frames: int | None=None):
+    def test_video_anchored(self, batch, batch_idx, return_predictions: bool=False, limit_frames: int | None=None):
         if limit_frames is not None:
             batch = {
                 "context": {
@@ -871,9 +665,9 @@ class DiffusionWrapper(LightningModule):
         if self.global_rank == 0:
             print(
                 f"test step {self.step_tracker.get_step()}; "
-                f"scene = {batch['scene']}; "
-                f"context = {batch['context']['index'].tolist()}"
-                f"target = {batch['target']['index'].tolist()}"
+                f"scene = {batch['scene'][0]}; "
+                f"context = {batch['context']['index'][0].tolist()} "
+                f"target = {batch['target']['index'][0].tolist()}"
             )
         b, v_c = batch["context"]["extrinsics"].shape[:2]
         assert b == 1, "Batch Size must be 1 for sampling video"
@@ -887,7 +681,7 @@ class DiffusionWrapper(LightningModule):
         rel_extrinsics = absolute_to_relative_camera(torch.concat([batch["context"]["extrinsics"], batch["target"]["extrinsics"]], dim=1), index=rel_index).float()
         batch["context"]["extrinsics"] = rel_extrinsics[:, :v_c, ...]
         batch["target"]["extrinsics"] = rel_extrinsics[:, v_c:, ...]
-        n_anchors = self.model_cfg.anchors
+        n_anchors = self.test_cfg.num_anchors_views
         
         print("Number of Anchors: ", n_anchors)
         
@@ -904,8 +698,8 @@ class DiffusionWrapper(LightningModule):
             
         indices = []
             
-        print(f"{0} - Generating Anchors: ", anchors_indices)
-        print(f"{0} - Context Indices: ", context["index"])
+        print(f"{0} - Context Indices: ", context["index"][0].tolist())
+        print(f"{0} - Generating Anchors: ", anchors_indices[0].tolist())
         
         anchor_batch = {
             "context": context,
@@ -1105,35 +899,36 @@ class DiffusionWrapper(LightningModule):
                             indices.append(anchors_indices[0][i].item())
         return samples, indices            
                 
-    def test_video_sequential(self, batch, batch_idx, limit_frames: int | None=None):
+    def test_video_autoregressive(self, batch, batch_idx, limit_frames: int | None=None):
+        if limit_frames is not None:
+            batch = {
+                "context": {
+                    "image": batch["context"]["image"],
+                    "extrinsics": batch["context"]["extrinsics"],
+                    "intrinsics": batch["context"]["intrinsics"],
+                    "near": batch["context"]["near"],
+                    "far": batch["context"]["far"],
+                    "index": batch["context"]["index"],
+                },
+                "target": {
+                    "image": batch["target"]["image"][:, :limit_frames, ...],
+                    "extrinsics": batch["target"]["extrinsics"][:,  :limit_frames, ...],
+                    "intrinsics": batch["target"]["intrinsics"][:,  :limit_frames, ...],
+                    "near": batch["target"]["near"][:,  :limit_frames, ...],
+                    "far": batch["target"]["far"][:,  :limit_frames, ...],
+                    "index": batch["target"]["index"][:,  :limit_frames, ...],
+                },
+                "scene": batch["scene"]
+            }
         if self.global_rank == 0:
             print(
                 f"test step {self.step_tracker.get_step()}; "
                 f"scene = {batch['scene']}; "
-                f"context = {batch['context']['index'].tolist()}"
+                f"context = {batch['context']['index'].tolist()} "
                 f"target = {batch['target']['index'].tolist()}"
             )
         b, v_c = batch["context"]["extrinsics"].shape[:2]
         assert b == 1, "Batch Size must be 1 for sampling video"
-        batch = {
-            "context": {
-                "image": batch["context"]["image"],
-                "extrinsics": batch["context"]["extrinsics"],
-                "intrinsics": batch["context"]["intrinsics"],
-                "near": batch["context"]["near"],
-                "far": batch["context"]["far"],
-                "index": batch["context"]["index"],
-            },
-            "target": {
-                "image": batch["target"]["image"][:, :limit_frames, ...],
-                "extrinsics": batch["target"]["extrinsics"][:,  :limit_frames, ...],
-                "intrinsics": batch["target"]["intrinsics"][:,  :limit_frames, ...],
-                "near": batch["target"]["near"][:,  :limit_frames, ...],
-                "far": batch["target"]["far"][:,  :limit_frames, ...],
-                "index": batch["target"]["index"][:,  :limit_frames, ...],
-            },
-            "scene": batch["scene"]
-        }
 
         output_dir = self.output_dir / "video"
         index = 1 
@@ -1256,215 +1051,17 @@ class DiffusionWrapper(LightningModule):
             }
 
             start = end
-
-    
-    def test_video_interleave(self, batch, batch_idx):
-        if self.global_rank == 0:
-            print(
-                f"test step {self.step_tracker.get_step()}; "
-                f"scene = {batch['scene']}; "
-                f"context = {batch['context']['index'].tolist()}"
-                f"target = {batch['target']['index'].tolist()}"
-            )
-        b, v_c = batch["context"]["extrinsics"].shape[:2]
-        assert b == 1, "Batch Size must be 1 for sampling video"
-        batch = {
-            "context": {
-                "image": batch["context"]["image"],
-                "extrinsics": batch["context"]["extrinsics"],
-                "intrinsics": batch["context"]["intrinsics"],
-                "near": batch["context"]["near"],
-                "far": batch["context"]["far"],
-                "index": batch["context"]["index"],
-            },
-            "target": {
-                "image": batch["target"]["image"][:, :85, ...],
-                "extrinsics": batch["target"]["extrinsics"][:,  :85, ...],
-                "intrinsics": batch["target"]["intrinsics"][:,  :85, ...],
-                "near": batch["target"]["near"][:,  :85, ...],
-                "far": batch["target"]["far"][:,  :85, ...],
-                "index": batch["target"]["index"][:,  :85, ...],
-            },
-            "scene": batch["scene"]
-        }
-
-        output_dir = self.output_dir / "video"
-        index = 1 
-        batch, rel_index = self.sample_indices(batch, index, False)
-        b, v_c, c, h, w = batch["context"]["image"].shape
-        b, num_t, c, h, w = batch["target"]["image"].shape
-        
-        spacing = 1
-
-        # Sample anchor views
-        anchor_batch = {
-            "context": batch["context"],
-            "target": {
-                "image": batch["target"]["image"][:, ::spacing, ...][:, :4, ...],
-                "extrinsics": batch["target"]["extrinsics"][:, ::spacing, ...][:, :4, ...],
-                "intrinsics": batch["target"]["intrinsics"][:, ::spacing, ...][:, :4, ...],
-                "near": batch["target"]["near"][:, ::spacing, ...][:, :4, ...],
-                "far": batch["target"]["far"][:, ::spacing, ...][:, :4, ...],
-                "index": batch["target"]["index"][:, ::spacing][:, :4],
-            },
-            "scene": batch["scene"]
-        }
-        b, v_c, c, h, w = anchor_batch["context"]["image"].shape
-
-        rel_index = 0
-        rel_extrinsics = absolute_to_relative_camera(torch.concat([anchor_batch["context"]["extrinsics"], anchor_batch["target"]["extrinsics"]], dim=1), index=rel_index).float()
-        anchor_batch["context"]["extrinsics"] = rel_extrinsics[:, :v_c, ...]
-        anchor_batch["target"]["extrinsics"] = rel_extrinsics[:, v_c:, ...]
-
-        anchor_views, anchor_batch = self.sample(anchor_batch)
-        anchor_views = anchor_views.clip(0.0, 1.0)
-        context_views = batch["context"]["image"]
-        target_views = batch["target"]["image"]
-        b, v_t, *_ = anchor_views.shape
-        b, v_c, *_ = context_views.shape
-        
-        scene = batch["scene"][0]
-        # context_index_str = "_".join(map(str, sorted(batch["context"]["index"][i].tolist())))
-        # print(context_index_str)
-
-        for index, color in zip(anchor_batch["target"]["index"][0], anchor_views[0]):
-            save_image(color, output_dir / scene / f"color/{index:0>6}.png")
-        
-        remaining_target_indices = batch["target"]["index"][0].tolist()
-        # remaining_target_indices_idx = [i for i in range(len(remaining_target_indices))]
-        for idx in anchor_batch["target"]["index"][0]:
-            remaining_target_indices.pop(remaining_target_indices.index(idx.item()))
-            # remaining_target_indices_idx.pop(remaining_target_indices.index(idx.item()))
-            
-        n_iterations = (len(remaining_target_indices) + 1) // 3
-
-        start = 4*spacing
-        last_batch = {
-            "image": anchor_views[:, -1:, ...],
-            "extrinsics": anchor_batch["target"]["extrinsics"][:, -1:, ...],
-            "intrinsics": anchor_batch["target"]["intrinsics"][:, -1:, ...],
-            "near": anchor_batch["target"]["near"][:, -1:, ...],
-            "far": anchor_batch["target"]["far"][:, -1:, ...],
-            "index": anchor_batch["target"]["index"][:, -1:],
-        }
-        
-
-        for i in range(1, n_iterations+1):
-            
-            end = start + 3
-            context_image = torch.concat([batch["context"]["image"], last_batch["image"]], dim=1)
-            context_extrinsics = torch.concat([batch["context"]["extrinsics"], last_batch["extrinsics"]], dim=1)
-            context_intrinsics = torch.concat([batch["context"]["intrinsics"], last_batch["intrinsics"]], dim=1)
-            context_near = torch.concat([batch["context"]["near"], last_batch["near"]], dim=1)
-            context_far = torch.concat([batch["context"]["far"], last_batch["far"]], dim=1)
-            context_index = torch.concat([batch["context"]["index"], last_batch["index"]], dim=1)
-
-            b, v_c, *_ = context_image.shape
-            print(start, end)
-            curr_batch = {
-                "context": {
-                    "image": context_image,
-                    "extrinsics": context_extrinsics,
-                    "intrinsics": context_intrinsics,
-                    "near": context_near,
-                    "far": context_far,
-                    "index": context_index,
-                },
-                "target": {
-                    "image": batch["target"]["image"][:, start:end, ...],
-                    "extrinsics": batch["target"]["extrinsics"][:,  start:end, ...],
-                    "intrinsics": batch["target"]["intrinsics"][:,  start:end, ...],
-                    "near": batch["target"]["near"][:,  start:end, ...],
-                    "far": batch["target"]["far"][:,  start:end, ...],
-                    "index": batch["target"]["index"][:,  start:end, ...],
-                },
-                "scene": batch["scene"]
-            }
-
-            print("Context Indices: ", curr_batch["context"]["index"])
-            print("Target Indices: ", curr_batch["target"]["index"])
-
-            b, v_t, *_ = curr_batch["target"]["image"].shape
-            rel_index = 1
-            rel_extrinsics = absolute_to_relative_camera(torch.concat([curr_batch["context"]["extrinsics"], curr_batch["target"]["extrinsics"]], dim=1), index=rel_index).float()
-            curr_batch["context"]["extrinsics"] = rel_extrinsics[:, :v_c, ...]
-            curr_batch["target"]["extrinsics"] = rel_extrinsics[:, v_c:, ...]
-            sampled_views, _ = self.sample(curr_batch)
-            sampled_views = sampled_views.clip(0.0, 1.0)
-   
-            b, v_t, *_ = sampled_views.shape
-            
-            scene = batch["scene"][0]
-
-            for index, color in zip(curr_batch["target"]["index"][0], sampled_views[0]):
-                save_image(color, output_dir / scene / f"color/{index:0>6}.png")
-
-            last_batch = {
-                "image": sampled_views[:, -1:, ...],
-                "extrinsics": curr_batch["target"]["extrinsics"][:, -1:, ...],
-                "intrinsics": curr_batch["target"]["intrinsics"][:, -1:, ...],
-                "near": curr_batch["target"]["near"][:, -1:, ...],
-                "far": curr_batch["target"]["far"][:, -1:, ...],
-                "index": curr_batch["target"]["index"][:, -1:],
-            }
-
-            start = end
-    
-    def predict_step(self, batch, batch_idx, dataloader_idx=0, return_predictions: bool=True, start: int=0, v_t: int=10, concurr: int=10, replace_original_conditioning: bool=False):
-
-        if v_t == -1:
-            b, v_t, *_ = batch["target"]["image"].shape
-        n_iteration = v_t // concurr
-        context = batch["context"]
-        images = []
-        indices = []
-        for i in range(n_iteration):
-            print("Concurrency Batch: ", i)
-            end = (i+1)*concurr
-            curr_batch = {
-                "context": context,
-                "target": {
-                    "image": batch["target"]["image"][:, start:end, ...],
-                    "extrinsics": batch["target"]["extrinsics"][:,  start:end, ...],
-                    "intrinsics": batch["target"]["intrinsics"][:,  start:end, ...],
-                    "near": batch["target"]["near"][:,  start:end, ...],
-                    "far": batch["target"]["far"][:,  start:end, ...],
-                    "index": batch["target"]["index"][:,  start:end, ...],
-                },
-                "scene": batch["scene"]
-            }        # Load the images.
-            
-            samples, idx = self.test_video_anchor_long(curr_batch, batch_idx, return_predictions=return_predictions)
-            if replace_original_conditioning:
-                context = {
-                    "image": samples[-1][None, None],
-                    "extrinsics": batch["target"]["extrinsics"][:,  end:end+1, ...],
-                    "intrinsics": batch["target"]["intrinsics"][:,  end:end+1, ...],
-                    "near": batch["target"]["near"][:,  end:end+1, ...],
-                    "far": batch["target"]["far"][:,  end:end+1, ...],
-                    "index": batch["target"]["index"][:,  end:end+1, ...],
-                }
-            images.extend(samples)
-            indices.extend(idx)
-            start = end
-        return images, indices
     
     def test_step(self, batch, batch_idx):
-        if self.global_rank == 0:
-            print(
-                f"test step {self.step_tracker.get_step()}; "
-                f"scene = {batch['scene']}; "
-                f"context = {batch['context']['index'].tolist()}"
-                f"target = {batch['target']['index'].tolist()}"
-            )
+ 
         b, v_c = batch["context"]["extrinsics"].shape[:2]
         
-        if self.test_cfg.mode == "video_sequential":
-            self.test_video_sequential(batch, batch_idx, limit_frames=85)
-        elif self.test_cfg.mode == "video_anchor_long":
-            self.test_video_anchor_long(batch, batch_idx, limit_frames=85)
+        if self.test_cfg.sampling_mode == "autoregressive":
+            self.test_video_autoregressive(batch, batch_idx, limit_frames=self.test_cfg.limit_frames)
+        elif self.test_cfg.sampling_mode == "anchored":
+            self.test_video_anchored(batch, batch_idx, limit_frames=self.test_cfg.limit_frames)
         else:
-            raise(Exception(f"Incorrect Mode {self.test_cfg.mode}"))
+            raise(Exception(f"Incorrect Mode {self.test_cfg.sampling_mode}"))
             # self.test_batch(batch, batch_idx)
 
     def on_test_end(self):

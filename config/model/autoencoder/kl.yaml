@@ -1,0 +1,25 @@
+name: kl
+pretrained_from: null
+
+# Refer https://huggingface.co/docs/diffusers/main/en/api/models/autoencoderkl#diffusers.AutoencoderKL
+kwargs:
+  in_channels: 3
+  out_channels: 3
+  down_block_types: 
+    - "DownEncoderBlock2D"
+  up_block_types: 
+    - "UpDecoderBlock2D"
+  block_out_channels: [64]
+  layers_per_block: 1
+  act_fn: "silu"
+  latent_channels: 4
+  norm_num_groups: 32
+  sample_size: 32
+  scaling_factor: 0.18215
+  shift_factor: null
+  latents_mean: null
+  latents_std: null
+  force_upcast: true
+  use_quant_conv: true
+  use_post_quant_conv: true
+  mid_block_add_attention: true
