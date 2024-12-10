@@ -4,7 +4,7 @@
 
 This is an extension of the codebase for 
 
-**MET3R: Measuring Multi-View Consistency in Generated Images**
+**MET3R: Measuring Multi-View Consistency in Generated Images** \
 *Mohammad Asim, Christopher Wewer, Thomas Wimmer, Bernt Schiele, and Jan Eric Lenssen*
 
 Check out the [project website here](https://geometric-rl.mpi-inf.mpg.de/met3r/).
