@@ -89,8 +89,10 @@ python -m src.main +experiment=baseline \
   hydra.run.dir="<runtime-dir>" \
   hydra.job.name=train
 ```
+> [!WARNING] 
+> In case of memory issues during training, we recommend lowering the batch size by appending ```data_loader.train.batch_size="<batch-size>"``` to the above command. 
 
-In case of memory issues during training, we recommend lowering the batch size by appending ```data_loader.train.batch_size="<batch-size>"``` to the above command. For running the training as a job chain on slurm or resuming training, always set the correct path in ```hydra.run.dir="<runtime-dir>"``` for each task.
+For running the training as a job chain on slurm or resuming training, always set the correct path in ```hydra.run.dir="<runtime-dir>"``` for each task.
 
 
 ## BibTeX
