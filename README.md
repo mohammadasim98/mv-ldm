@@ -57,11 +57,24 @@ The main entry point is `src/scripts/generate_mvldm.py`. Call it via:
 > Sampling requires a GPU with at least 16 GB of VRAM.
 
 ```bash
-python -m src.scripts.generate_mvldm +experiment=baseline dataset.root="<root-path-to-re10k-dataset>" scene_id="<scene-id>" checkpointing.load="<path-to-checkpoint>" mode=test dataset/view_sampler=evaluation dataset.view_sampler.index_path=assets/evaluation_index/re10k_video.json test.sampling_mode=anchored test.num_anchors_views=4 test.output_dir=./outputs/mvldm 
+python -m src.scripts.generate_mvldm +experiment=baseline \
+  mode=test \
+  dataset.root="<root-path-to-re10k-dataset>" \
+  scene_id="<scene-id>" \ 
+  checkpointing.load="<path-to-checkpoint>" \
+  dataset/view_sampler=evaluation \
+  dataset.view_sampler.index_path=assets/evaluation_index/re10k_video.json \
+  test.sampling_mode=anchored \
+  test.num_anchors_views=4 \
+  test.output_dir=./outputs/mvldm 
 ```
 
-Where ```ind="<scene-id>"``` either defines the specific integer index of a scene ordered as in ```assets/evaluation_index/re10k_video.json``` or the sequence string directly.
-
+> [!NOTE]
+> ```scene_id="<scene-id>"``` either defines the specific integer index which refers to an ID of a scene ordered as in ```assets/evaluation_index/re10k_video.json``` or the sequence ID as a string e.g. ```"2d3f982ada31489c"```.
+> ```python
+> scene_id=25
+> scene_id="2d3f982ada31489c"
+> ```
 ### Training MV-LDM
 Our code supports multi-GPU training. The above batch size is the per-GPU batch size.
 
@@ -70,7 +83,11 @@ Our code supports multi-GPU training. The above batch size is the per-GPU batch 
 
 
 ```bash
-python -m src.main +experiment=baseline mode=train hydra.run.dir="<runtime-dir>" dataset.root="<root-path-to-re10k-dataset>" hydra.job.name=train
+python -m src.main +experiment=baseline \
+  mode=train \
+  dataset.root="<root-path-to-re10k-dataset>" \
+  hydra.run.dir="<runtime-dir>" \
+  hydra.job.name=train
 ```
 
 In case of memory issues during training, we recommend lowering the batch size by appending ```data_loader.train.batch_size="<batch-size>"``` to the above command. For running the training as a job chain on slurm or resuming training, always set the correct path in ```hydra.run.dir="<runtime-dir>"``` for each task.
