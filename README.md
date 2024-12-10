@@ -1,5 +1,9 @@
 # Multi-View Latent Diffusion Model (MV-LDM)
 
+We propose an open-source multi-view diffusion model trained on RealEstate-10K dataset. The architecture follows similar structure as in [CAT3D](https://cat3d.github.io/).
+
+![Alt text](assets/arch/mvldm_arch.png)
+
 [![arXiv](https://img.shields.io/badge/arXiv-2403.16292-b31b1b.svg)](https://arxiv.org/abs/2403.16292)
 
 This is an extension of the codebase for 
