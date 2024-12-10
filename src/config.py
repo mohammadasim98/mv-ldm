@@ -43,7 +43,7 @@ class RootCfg:
     train: TrainCfg
     freeze: FreezeCfg
     seed: int | None
-    scene_id: int | None = None
+    scene_id: int | str | None = None
 
 
 TYPE_HOOKS = {

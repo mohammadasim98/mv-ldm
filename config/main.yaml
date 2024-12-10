@@ -1,6 +1,5 @@
 defaults:
   - dataset: re10k
-  - optional dataset/diffusion_view_sampler: ${dataset/view_sampler}_${dataset}
   - model/scheduler: ddim
   - model/denoiser: mv_unet
   - model/autoencoder: kl

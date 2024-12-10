@@ -113,19 +113,20 @@ hydra:
     - hydra.mode=RUN
     task:
     - +experiment=baseline
-    - dataset.root=/BS/3diff/static00/datasets/re10k
-    - scene_id=0
-    - checkpointing.load=checkpoints/1679000.ckpt
     - mode=test
+    - dataset.root=/BS/3diff/static00/datasets/re10k
+    - scene_id=2d3f982ada31489c
+    - checkpointing.load=checkpoints/1679000.ckpt
     - dataset/view_sampler=evaluation
     - dataset.view_sampler.index_path=assets/evaluation_index/re10k_video.json
     - test.sampling_mode=anchored
     - test.num_anchors_views=4
     - test.output_dir=./outputs/mvldm
+    - model.scheduler.num_inference_steps=25
   job:
     name: generate_mvldm
     chdir: null
-    override_dirname: +experiment=baseline,checkpointing.load=checkpoints/1679000.ckpt,dataset.root=/BS/3diff/static00/datasets/re10k,dataset.view_sampler.index_path=assets/evaluation_index/re10k_video.json,dataset/view_sampler=evaluation,mode=test,scene_id=0,test.num_anchors_views=4,test.output_dir=./outputs/mvldm,test.sampling_mode=anchored
+    override_dirname: +experiment=baseline,checkpointing.load=checkpoints/1679000.ckpt,dataset.root=/BS/3diff/static00/datasets/re10k,dataset.view_sampler.index_path=assets/evaluation_index/re10k_video.json,dataset/view_sampler=evaluation,mode=test,model.scheduler.num_inference_steps=25,scene_id=2d3f982ada31489c,test.num_anchors_views=4,test.output_dir=./outputs/mvldm,test.sampling_mode=anchored
     id: ???
     num: ???
     config_name: main
@@ -160,7 +161,6 @@ hydra:
       model/scheduler: ddim
       dataset: re10k
       dataset/view_sampler: evaluation
-      dataset/diffusion_view_sampler: evaluation_re10k
       hydra/env: default
       hydra/callbacks: null
       hydra/job_logging: default

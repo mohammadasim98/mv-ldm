@@ -26,7 +26,7 @@ model:
   scheduler:
     name: ddim
     pretrained_from: null
-    num_inference_steps: 70
+    num_inference_steps: 25
     num_train_timesteps: 1000
     kwargs:
       num_train_timesteps: 1000
@@ -109,7 +109,7 @@ model:
   enable_xformers_memory_efficient_attention: false
   in_channels: 3
   out_channels: 3
-scene_id: 0
+scene_id: 2d3f982ada31489c
 mode: test
 seed: null
 wandb:

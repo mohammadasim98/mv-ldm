@@ -1,10 +1,11 @@
 - +experiment=baseline
-- dataset.root=/BS/3diff/static00/datasets/re10k
-- scene_id=0
-- checkpointing.load=checkpoints/1679000.ckpt
 - mode=test
+- dataset.root=/BS/3diff/static00/datasets/re10k
+- scene_id=2d3f982ada31489c
+- checkpointing.load=checkpoints/1679000.ckpt
 - dataset/view_sampler=evaluation
 - dataset.view_sampler.index_path=assets/evaluation_index/re10k_video.json
 - test.sampling_mode=anchored
 - test.num_anchors_views=4
 - test.output_dir=./outputs/mvldm
+- model.scheduler.num_inference_steps=25

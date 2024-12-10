@@ -6,7 +6,7 @@ import os
 import PIL
 import math
 import hydra
-from tqdm import tqdm
+from tqdm import tqdm, trange
 from pathlib import Path
 from heapq import nsmallest
 from jaxtyping import Float
@@ -698,8 +698,8 @@ class DiffusionWrapper(LightningModule):
             
         indices = []
             
-        print(f"{0} - Context Indices: ", context["index"][0].tolist())
-        print(f"{0} - Generating Anchors: ", anchors_indices[0].tolist())
+        print(f"INFO - Context Indices: ", context["index"][0].tolist())
+        print(f"INFO - Generating Anchors: ", anchors_indices[0].tolist())
         
         anchor_batch = {
             "context": context,
@@ -739,8 +739,10 @@ class DiffusionWrapper(LightningModule):
             "far": context_far,
             "index": context_index,
         }
-            
-        for i in range(1, int(math.ceil((n_anchors - 4) / 3)) + 1):
+        print("INFO - Anchors generated!")    
+        print("INFO - Generating remaining views")    
+        n_iterations = int(math.ceil((n_anchors - 4) / 3)) + 1
+        for i in range(1, n_iterations):
             
             start = (i-1) * 3 * anchor_step
             end = i * 3 * anchor_step
@@ -749,8 +751,8 @@ class DiffusionWrapper(LightningModule):
             
             b, v_c, c, h, w = context["image"].shape
 
-            print(f"{i} - Generating Anchors: ", anchors_indices[1:])
-            print(f"{i} - Context Indices: ", context["index"])
+            # print(f"{i+1} - Generating Anchors: ", anchors_indices[1:])
+            # print(f"{i+1} - Context Indices: ", context["index"])
  
             anchor_batch = {
                 "context": context,

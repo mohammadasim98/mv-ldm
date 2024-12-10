@@ -4,7 +4,7 @@
 
 This is an extension of the codebase for 
 
-**MET3R: Measuring Multi-View Consistency in Generated Images** \
+**MET3R: Measuring Multi-View Consistency in Generated Images**
 *Mohammad Asim, Christopher Wewer, Thomas Wimmer, Bernt Schiele, and Jan Eric Lenssen*
 
 Check out the [project website here](https://geometric-rl.mpi-inf.mpg.de/met3r/).
@@ -57,16 +57,7 @@ The main entry point is `src/scripts/generate_mvldm.py`. Call it via:
 > Sampling requires a GPU with at least 16 GB of VRAM.
 
 ```bash
-python -m src.scripts.generate_mvldm +experiment=baseline \
-  mode=test \
-  dataset.root="<root-path-to-re10k-dataset>" \
-  scene_id="<scene-id>" \ 
-  checkpointing.load="<path-to-checkpoint>" \
-  dataset/view_sampler=evaluation \
-  dataset.view_sampler.index_path=assets/evaluation_index/re10k_video.json \
-  test.sampling_mode=anchored \
-  test.num_anchors_views=4 \
-  test.output_dir=./outputs/mvldm 
+python -m src.scripts.generate_mvldm +experiment=baseline mode=test dataset.root="<root-path-to-re10k-dataset>" scene_id="<scene-id>" checkpointing.load="<path-to-checkpoint>" dataset/view_sampler=evaluation dataset.view_sampler.index_path=assets/evaluation_index/re10k_video.json test.sampling_mode=anchored test.num_anchors_views=4 test.output_dir=./outputs/mvldm 
 ```
 
 > [!NOTE]
@@ -74,6 +65,14 @@ python -m src.scripts.generate_mvldm +experiment=baseline \
 > ```python
 > scene_id=25
 > scene_id="2d3f982ada31489c"
+> ```
+> To limit the number of frames in a given sequence, add the ```test.limit_frames``` argument to the above command as integer, e.g.,
+> ```python
+> test.limit_frames=80
+> ```
+> To define DDIM sampling steps, use the argument ```model.scheduler.num_inference_steps```, e.g.,
+> ```python
+> model.scheduler.num_inference_steps=25
 > ```
 ### Training MV-LDM
 Our code supports multi-GPU training. The above batch size is the per-GPU batch size.
@@ -83,10 +82,10 @@ Our code supports multi-GPU training. The above batch size is the per-GPU batch 
 
 
 ```bash
-python -m src.main +experiment=baseline \
-  mode=train \
-  dataset.root="<root-path-to-re10k-dataset>" \
-  hydra.run.dir="<runtime-dir>" \
+python -m src.main +experiment=baseline
+  mode=train
+  dataset.root="<root-path-to-re10k-dataset>"
+  hydra.run.dir="<runtime-dir>"
   hydra.job.name=train
 ```
 > [!WARNING] 

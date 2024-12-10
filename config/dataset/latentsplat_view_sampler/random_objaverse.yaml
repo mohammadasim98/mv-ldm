@@ -1,5 +1,0 @@
-# @package _global_
-
-dataset:
-  view_sampler:
-    num_target_views: 4
