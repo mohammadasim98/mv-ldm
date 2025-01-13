@@ -31,7 +31,6 @@ def evaluate(cfg_dict: DictConfig):
     set_cfg(cfg_dict)
     if cfg.seed is not None:
         torch.manual_seed(cfg.seed)
-    print(cfg)
 
     with open(cfg.dataset.view_sampler.index_path) as f:
         indices = json.load(f)

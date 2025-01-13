@@ -82,5 +82,5 @@ trainer:
   precision: null
   validate: true
   accumulate_grad_batches: 2
-  limit_test_batches: 32
+  limit_test_batches: 1
   strategy: 'ddp_find_unused_parameters_true'

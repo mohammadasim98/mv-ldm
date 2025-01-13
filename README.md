@@ -29,18 +29,6 @@ pip install -r requirements.txt
 
 ```
 
-
-<details>
-<summary>Troubleshooting</summary>
-<br>
-
-If you face unrealistic CUDA out of memory issues (probably because of different GPU architectures during kernel compilation and training), try deinstalling the rasterizer and installing it with specified architectures:
-```bash
-pip uninstall diff-gaussian-rasterization
-TORCH_CUDA_ARCH_LIST="6.0 7.0 7.5 8.0 8.6+PTX" pip install git+https://github.com/Chrixtar/latent-gaussian-rasterization
-```
-</details>
-
 ## Acquiring Datasets
 Please move all dataset directories into a newly created `datasets` folder in the project root directory or modify the root path as part of the dataset config files in `config/dataset`.
 

@@ -26,7 +26,7 @@ model:
   scheduler:
     name: ddim
     pretrained_from: null
-    num_inference_steps: 25
+    num_inference_steps: 50
     num_train_timesteps: 1000
     kwargs:
       num_train_timesteps: 1000
@@ -109,7 +109,7 @@ model:
   enable_xformers_memory_efficient_attention: false
   in_channels: 3
   out_channels: 3
-scene_id: 2d3f982ada31489c
+scene_id: 44c16554a21aa6af
 mode: test
 seed: null
 wandb:
@@ -161,7 +161,7 @@ trainer:
   precision: 16-mixed
   validate: true
   accumulate_grad_batches: 2
-  limit_test_batches: 32
+  limit_test_batches: 1
   strategy: ddp_find_unused_parameters_true
 optimizer:
   name: AdamW
