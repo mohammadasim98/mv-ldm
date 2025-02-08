@@ -405,7 +405,7 @@ class DiffusionWrapper(LightningModule):
             pred_out = pred[:, v_c:, ...]
 
         # Diffusion Loss
-        loss = F.mse_loss(pred_out.float(), target_latents.float(), reduction="mean")
+        loss = F.mse_loss(pred_out.float(), target_noise.float(), reduction="mean")
 
         self.log("loss/diffusion", loss)   
         return loss
