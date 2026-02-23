@@ -90,13 +90,14 @@ For running the training as a job chain on slurm or resuming training, always se
 If you are planning to use MV-LDM in your work, consider citing it as follows.
 <section class="section" id="BibTeX">
   <div class="container is-max-desktop content">
-    <pre><code>@inproceedings{asim24met3r,
+    <pre><code>@inproceedings{asim25met3r,
     title = {MEt3R: Measuring Multi-View Consistency in Generated Images},
     author = {Asim, Mohammad and Wewer, Christopher and Wimmer, Thomas and Schiele, Bernt and Lenssen, Jan Eric},
-    booktitle = {Computer Vision and Pattern Recognition ({CVPR})},
-    year = {2024},
+    booktitle = {IEEE/CVF Computer Vision and Pattern Recognition ({CVPR})},
+    year = {2025},
 }</code></pre>
   </div>
 </section>
+
 
 
